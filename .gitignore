@@ -12,6 +12,28 @@ dist
 dist-ssr
 *.local
 
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# environment variables
+.env
+
+# testing
+/coverage
+
+# production
+/build
+/dist
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
