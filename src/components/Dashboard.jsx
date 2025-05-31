@@ -7,6 +7,8 @@ import { subDays, subWeeks, subMonths, startOfDay } from 'date-fns';
 import DateFilter from './DateFilter';
 import { parseISO } from 'date-fns';
 import StockPriceChart from './StockPriceChart';
+import CompetitorsList from './CompetitorsList';
+import SentimentOverview from './SentimentOverview';
 
 // Common stock symbol mappings
 const STOCK_SYMBOL_MAPPINGS = {
@@ -168,6 +170,16 @@ const STOCK_SYMBOL_TYPOS = {
     'BILI': 'BILI'
 };
 
+// Manual mapping of stock symbols to their competitors
+const COMPETITOR_MAPPINGS = {
+    'GOOGL': ['AAPL', 'MSFT', 'AMZN', 'META', 'NFLX'],
+    'AAPL': ['MSFT', 'GOOGL', 'AMZN', 'META', 'NFLX'],
+    'MSFT': ['AAPL', 'GOOGL', 'AMZN', 'META', 'NFLX'],
+    'AMZN': ['AAPL', 'GOOGL', 'MSFT', 'META', 'NFLX'],
+    'TSLA': ['GM', 'F', 'TM', 'RIVN', 'LCID'],
+    // Add more mappings as needed
+};
+
 function Dashboard() {
   const [dateRange, setDateRange] = useState('1w');
   const [searchResults, setSearchResults] = useState(null);
@@ -258,11 +270,15 @@ function Dashboard() {
       const stockSymbol = getStockSymbol(query);
       console.log('Searching for stock symbol:', stockSymbol);
       
+      // Get competitor symbols based on the searched stock symbol
+      const competitorSymbols = COMPETITOR_MAPPINGS[stockSymbol] ? COMPETITOR_MAPPINGS[stockSymbol].join(',') : '';
+
       const response = await axios.get(`http://localhost:5000/api/search/${encodeURIComponent(stockSymbol)}`, {
         params: {
-          dateRange: dateRange
+          dateRange: dateRange,
+          competitorSymbols: competitorSymbols
         },
-        timeout: 5000,
+        timeout: 10000, // 10 second timeout
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
@@ -283,13 +299,17 @@ function Dashboard() {
         errorMessage = `Server error: ${errorData.error || errorData.message || 'Unknown error'}`;
         if (errorData.details) {
           console.error('Error details:', errorData.details);
+          errorMessage += `\nDetails: ${errorData.details}`;
         }
       } else if (error.request) {
         // The request was made but no response was received
         errorMessage = 'No response from server. Please check if the backend is running.';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timed out. Please try again.';
       }
       
       setError(errorMessage);
+      setSearchResults(null); // Clear any previous results on error
     } finally {
       setLoading(false);
     }
@@ -363,46 +383,58 @@ function Dashboard() {
         </div>
       ) : searchResults && (
         <div className="max-w-7xl mx-auto">
-          {/* Stock Price Overview */}
-          {searchResults.stockQuote && (
-             <div className="bg-white rounded-xl shadow-xl p-6 mb-6 hover:shadow-2xl transition-shadow">
-                <h3 className="text-lg font-semibold text-gray-700 mb-4">Stock Overview</h3>
-                <div className="flex justify-between items-center">
-                    <div>
-                        <span className="text-2xl font-bold text-gray-800 mr-2">{searchQuery}</span>
-                         <span className="text-3xl font-bold text-primary-600">{searchResults.stockQuote.c.toFixed(2)}</span> {/* Current Price */}
-                    </div>
-                    <div>
-                        {formatStockChange(searchResults.stockQuote.d, searchResults.stockQuote.dp)} {/* Change and Percentage Change */}
-                    </div>
-                </div>
-                <div className="flex justify-between text-sm text-gray-600 mt-2">
-                    <span>Open: {searchResults.stockQuote.o.toFixed(2)}</span>
-                    <span>High: {searchResults.stockQuote.h.toFixed(2)}</span>
-                    <span>Low: {searchResults.stockQuote.l.toFixed(2)}</span>
-                    <span>Previous Close: {searchResults.stockQuote.pc.toFixed(2)}</span>
-                </div>
-             </div>
-          )}
+           {/* Sentiment Analysis Overview - Moved to top */}
+           {filteredMetrics && filteredMetrics.volume > 0 && (
+               <SentimentOverview metrics={filteredMetrics} />
+           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-xl shadow-xl p-6 hover:shadow-2xl transition-shadow">
-                <StockPriceChart data={searchResults.stockCandles} dateRange={dateRange} />
+           {/* Stock Price Overview */}
+           {searchResults.stockQuote && (
+              <div className="bg-white rounded-xl shadow-xl p-6 mb-6 hover:shadow-2xl transition-shadow">
+                 <h3 className="text-lg font-semibold text-gray-700 mb-4">Stock Overview</h3>
+                 <div className="flex justify-between items-center">
+                     <div>
+                         <span className="text-2xl font-bold text-gray-800 mr-2">{searchQuery}</span>
+                          <span className="text-3xl font-bold text-primary-600">{searchResults.stockQuote.c.toFixed(2)}</span> {/* Current Price */}
+                     </div>
+                     <div>
+                         {formatStockChange(searchResults.stockQuote.d, searchResults.stockQuote.dp)} {/* Change and Percentage Change */}
+                     </div>
+                 </div>
+                 <div className="flex justify-between text-sm text-gray-600 mt-2">
+                     <span>Open: {searchResults.stockQuote.o.toFixed(2)}</span>
+                     <span>High: {searchResults.stockQuote.h.toFixed(2)}</span>
+                     <span>Low: {searchResults.stockQuote.l.toFixed(2)}</span>
+                     <span>Previous Close: {searchResults.stockQuote.pc.toFixed(2)}</span>
+                 </div>
               </div>
-            </div>
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-xl shadow-xl p-6 hover:shadow-2xl transition-shadow">
-                <SentimentChart data={getFilteredArticles(searchResults.articles)} dateRange={dateRange} />
-              </div>
-            </div>
-          </div>
+           )}
 
-          <div className="grid grid-cols-1 mb-6">
-            <div className="lg:col-span-3">
-              <NewsSection selectedStock={searchQuery} />
-            </div>
-          </div>
+           {/* Charts and Competitors Section - Swapped positions */}
+           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+               {/* Sentiment and Stock Price Chart Column (Now Left) */}
+               <div className="lg:col-span-1">
+                  <SentimentChart 
+                    data={getFilteredArticles(searchResults.articles)} 
+                    dateRange={dateRange} 
+                    stockCandles={searchResults.stockCandles} // Pass stockCandles data
+                  />
+                </div>
+                {/* Competitors List Column (Now Right) */}
+                <div className="lg:col-span-1">
+                  {/* Placeholder for Competitors List */}
+                  <CompetitorsList 
+                    stockSymbol={searchQuery} 
+                    competitorQuotes={searchResults.competitorQuotes} // Pass competitor quotes
+                  />
+                </div>
+           </div>
+
+           <div className="grid grid-cols-1 mb-6">
+               <div className="lg:col-span-2"> {/* Adjust span if needed, assuming news takes full width below charts */}
+                 <NewsSection selectedStock={searchQuery} />
+               </div>
+           </div>
         </div>
       )}
     </div>

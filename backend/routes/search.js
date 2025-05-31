@@ -1,18 +1,22 @@
 import express from 'express';
 import natural from 'natural';
 import { getNewsForTopic } from '../services/newsService.js';
-import { getStockQuote, getStockCandles } from '../services/stockService.js';
+import { getStockQuote, getStockCandles, getMultipleStockQuotes } from '../services/stockService.js';
 
 const router = express.Router();
 const analyzer = new natural.SentimentAnalyzer("English", natural.PorterStemmer, "afinn");
 
 router.get('/:query', async (req, res) => {
   const { query } = req.params;
-  const { dateRange } = req.query;
+  const { dateRange, competitorSymbols } = req.query;
+
+  // Parse competitor symbols string into an array
+  const competitorSymbolsArray = competitorSymbols ? competitorSymbols.split(',').map(symbol => symbol.trim()).filter(symbol => symbol.length > 0) : [];
 
   console.log('Search request received:', {
     query,
     dateRange,
+    competitorSymbols: competitorSymbolsArray,
     queryParams: req.query
   });
 
@@ -26,8 +30,8 @@ router.get('/:query', async (req, res) => {
     // Fetch news data (can be done in parallel)
     const newsDataPromise = getNewsForTopic(query, dateRange);
 
-    // Fetch stock quote and candles data from Finnhub (can be done in parallel)
-    const stockSymbol = query.toUpperCase(); // Use uppercase symbol for Finnhub
+    // Fetch stock quote and candles data from Finnhub/Twelve Data (can be done in parallel)
+    const stockSymbol = query.toUpperCase(); // Use uppercase symbol for Finnhub/Twelve Data
     console.log('Fetching stock data for symbol:', stockSymbol);
     
     const stockQuotePromise = getStockQuote(stockSymbol).catch(error => {
@@ -40,11 +44,18 @@ router.get('/:query', async (req, res) => {
       return { success: false, error: error.message };
     });
 
+    // Fetch competitor stock quotes (can be done in parallel)
+    const competitorQuotesPromise = getMultipleStockQuotes(competitorSymbolsArray).catch(error => {
+        console.error('Error fetching competitor quotes:', error);
+        return {}; // Return empty object on error
+    });
+
     // Wait for all promises to resolve
-    const [newsData, stockQuoteResult, stockCandlesResult] = await Promise.all([
+    const [newsData, stockQuoteResult, stockCandlesResult, competitorQuotes] = await Promise.all([
         newsDataPromise,
         stockQuotePromise,
-        stockCandlesPromise
+        stockCandlesPromise,
+        competitorQuotesPromise
     ]);
 
     console.log(`Received ${newsData.articles.length} articles from News API`);
@@ -68,6 +79,8 @@ router.get('/:query', async (req, res) => {
     } else {
         console.warn('Failed to fetch stock candles:', stockCandlesResult.error || stockCandlesResult.message);
     }
+
+    console.log(`Fetched ${Object.keys(competitorQuotes).length} competitor quotes.`);
 
     const analyzedArticles = newsData.articles
       .filter(article => article.title && article.description)
@@ -118,10 +131,11 @@ router.get('/:query', async (req, res) => {
         tweetsAnalyzed: analyzedArticles.length
       },
       stockQuote: stockQuote,
-      stockCandles: stockCandles
+      stockCandles: stockCandles,
+      competitorQuotes: competitorQuotes
     };
 
-    console.log('Sending response with metrics:', response.metrics, 'stock quote presence:', !!response.stockQuote, 'stock candles presence:', !!response.stockCandles);
+    console.log('Sending response with metrics:', response.metrics, 'stock quote presence:', !!response.stockQuote, 'stock candles presence:', !!response.stockCandles, 'competitor quotes presence:', !!response.competitorQuotes && Object.keys(response.competitorQuotes).length > 0);
     res.json(response);
   } catch (error) {
     console.error('Search route error:', error);
