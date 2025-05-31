@@ -7,6 +7,11 @@ function StockFilter({ selectedStock, onStockChange, dateRange, onDateRangeChang
     { value: '3m', label: '3 Months' }
   ];
 
+  const handleDateRangeChange = (e) => {
+    console.log('Date range changed in StockFilter:', e.target.value);
+    onDateRangeChange(e.target.value);
+  };
+
   return (
     <div className="flex flex-wrap gap-4 items-center justify-center md:justify-start">
       <select
@@ -22,7 +27,7 @@ function StockFilter({ selectedStock, onStockChange, dateRange, onDateRangeChang
 
       <select
         value={dateRange}
-        onChange={(e) => onDateRangeChange(e.target.value)}
+        onChange={handleDateRangeChange}
         className="px-4 py-2 border-2 border-primary-200 rounded-lg bg-white text-primary-600 
                  focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all"
       >
