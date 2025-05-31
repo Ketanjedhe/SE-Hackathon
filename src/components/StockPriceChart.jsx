@@ -8,9 +8,9 @@ import {
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 } from 'chart.js';
-import { format, fromUnixTime } from 'date-fns'; // Use fromUnixTime for timestamps
 
 ChartJS.register(
   CategoryScale,
@@ -19,63 +19,45 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 );
 
 function StockPriceChart({ data, dateRange }) {
   const [chartData, setChartData] = useState(null);
 
   useEffect(() => {
-    console.log('StockPriceChart received data:', data, 'for date range:', dateRange);
+    console.log('Stock price data received:', data);
 
     if (!data || !data.t || data.t.length === 0) {
+      console.log('No valid stock price data');
       setChartData(null);
       return;
     }
 
-    // Finnhub candle data structure:
-    // c: [close prices]
-    // h: [high prices]
-    // l: [low prices]
-    // o: [open prices]
-    // s: status
-    // t: [timestamps]
-    // v: [volume]
-
-    // Prepare data for the chart
-    const timestamps = data.t.map(ts => fromUnixTime(ts)); // Convert Unix timestamps to Date objects
-    const closingPrices = data.c;
-
-    // Determine date format for labels based on dateRange
-    let dateFormatString = 'MMM dd, HH:mm'; // Default
-    switch (dateRange) {
-        case 'yesterday':
-        case '2d':
-        case '1w':
-            dateFormatString = 'MMM dd, HH:mm';
-            break;
-         // Add other cases if needed
-    }
-
-    const labels = timestamps.map(date => format(date, dateFormatString));
-
-    console.log('StockPriceChart generated labels:', labels);
-    console.log('StockPriceChart closing prices:', closingPrices);
-
-    setChartData({
-      labels,
-      datasets: [{
-        label: 'Closing Price',
-        data: closingPrices,
-        borderColor: 'rgb(54, 162, 235)',
-        tension: 0.1,
-        fill: false,
-        pointRadius: 1, // Smaller points for potentially dense data
-        pointHoverRadius: 3
-      }]
+    const timestamps = data.t.map(ts => {
+      const date = new Date(ts * 1000);
+      return date.toLocaleString();
     });
 
-  }, [data, dateRange]); // Depend on data and dateRange
+    const closingPrices = data.c;
+
+    console.log('Processed data:', { timestamps, closingPrices });
+
+    setChartData({
+      labels: timestamps,
+      datasets: [{
+        label: 'Stock Price',
+        data: closingPrices,
+        borderColor: 'rgb(75, 192, 192)',
+        backgroundColor: 'rgba(75, 192, 192, 0.5)',
+        tension: 0.1,
+        fill: true,
+        pointRadius: 2,
+        pointHoverRadius: 5
+      }]
+    });
+  }, [data, dateRange]);
 
   const options = {
     responsive: true,
@@ -86,39 +68,39 @@ function StockPriceChart({ data, dateRange }) {
         display: true,
         text: 'Stock Price Movement'
       },
-       tooltip: {
+      tooltip: {
         callbacks: {
           label: function(context) {
-            const label = context.dataset.label || '';
-            if (context.parsed.y !== null) {
-              return `${label}: ${context.parsed.y.toFixed(2)}`;
-            }
-            return '';
+            return `Price: $${context.parsed.y.toFixed(2)}`;
           }
         }
       }
     },
     scales: {
       y: {
+        beginAtZero: false,
         title: {
           display: true,
-          text: 'Price (USD)'
+          text: 'Price ($)'
         }
       },
       x: {
         title: {
           display: true,
-          text: 'Date and Time'
+          text: 'Time'
+        },
+        ticks: {
+          maxRotation: 45,
+          minRotation: 45
         }
-         // Consider using 'time' scale if necessary for better time series representation
       }
     }
   };
 
-   if (!chartData) {
+  if (!chartData) {
     return (
-      <div className="w-full h-[400px] flex items-center justify-center">
-        <p className="text-gray-500">No stock price data available for the selected time period.</p>
+      <div className="w-full h-[400px] flex items-center justify-center bg-white rounded-lg">
+        <p className="text-gray-500">No stock price data available</p>
       </div>
     );
   }
@@ -130,4 +112,4 @@ function StockPriceChart({ data, dateRange }) {
   );
 }
 
-export default StockPriceChart; 
+export default StockPriceChart;

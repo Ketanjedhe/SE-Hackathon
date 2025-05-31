@@ -18,7 +18,13 @@ function StockFilter({ selectedStock, onStockChange, dateRange, onDateRangeChang
         value={selectedStock}
         onChange={(e) => onStockChange(e.target.value)}
         className="px-4 py-2 border-2 border-primary-200 rounded-lg bg-white text-primary-600 
-                 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all"
+                 hover:border-primary-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 
+                 transition-all duration-300 ease-in-out shadow-sm hover:shadow-md
+                 cursor-pointer appearance-none bg-no-repeat bg-right pr-8"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236366f1'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+          backgroundSize: '1.5em'
+        }}
       >
         {stocks.map(stock => (
           <option key={stock} value={stock}>{stock}</option>
@@ -29,7 +35,13 @@ function StockFilter({ selectedStock, onStockChange, dateRange, onDateRangeChang
         value={dateRange}
         onChange={handleDateRangeChange}
         className="px-4 py-2 border-2 border-primary-200 rounded-lg bg-white text-primary-600 
-                 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all"
+                 hover:border-primary-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 
+                 transition-all duration-300 ease-in-out shadow-sm hover:shadow-md
+                 cursor-pointer appearance-none bg-no-repeat bg-right pr-8"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236366f1'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+          backgroundSize: '1.5em'
+        }}
       >
         {ranges.map(range => (
           <option key={range.value} value={range.value}>{range.label}</option>

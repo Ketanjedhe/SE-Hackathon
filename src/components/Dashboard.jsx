@@ -9,6 +9,7 @@ import { parseISO } from 'date-fns';
 import StockPriceChart from './StockPriceChart';
 import CompetitorsList from './CompetitorsList';
 import SentimentOverview from './SentimentOverview';
+import SentimentOverviewSection from './SentimentOverviewSection';
 
 // Common stock symbol mappings
 const STOCK_SYMBOL_MAPPINGS = {
@@ -258,6 +259,19 @@ function Dashboard() {
     return filtered;
   };
 
+// Add new utility function at the top of the file
+const checkServerStatus = async () => {
+  try {
+    const response = await axios.get('http://localhost:5000/api/health');
+    return response.data.status === 'ok';
+  } catch (error) {
+    return false;
+  }
+};
+
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
 const handleSearch = async (query) => {
     setLoading(true);
     setError(null);
@@ -268,50 +282,62 @@ const handleSearch = async (query) => {
         return;
     }
 
-    try {
-      const stockSymbol = getStockSymbol(query);
-      console.log('Searching for stock symbol:', stockSymbol);
-      
-      // Get competitor symbols based on the searched stock symbol
-      const competitorSymbols = COMPETITOR_MAPPINGS[stockSymbol] ? COMPETITOR_MAPPINGS[stockSymbol].join(',') : '';
+    // Check server status first
+    const isServerRunning = await checkServerStatus();
+    if (!isServerRunning) {
+        setError('Server is not responding. Please ensure the backend server is running.');
+        setLoading(false);
+        return;
+    }
 
-      const response = await axios.get(`http://localhost:5000/api/search/${encodeURIComponent(stockSymbol)}`, {
-        params: {
-          dateRange: dateRange,
-          competitorSymbols: competitorSymbols // Include competitor symbols in the request
-        },
-        timeout: 10000, // 10 second timeout
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
+    let retries = 0;
+    const attemptSearch = async () => {
+      try {
+        const stockSymbol = getStockSymbol(query);
+        const competitorSymbols = COMPETITOR_MAPPINGS[stockSymbol] ? COMPETITOR_MAPPINGS[stockSymbol].join(',') : '';
+
+        const response = await axios.get(
+          `http://localhost:5000/api/search/${encodeURIComponent(stockSymbol)}`,
+          {
+            params: { dateRange, competitorSymbols },
+            timeout: 10000,
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        setSearchResults(response.data);
+        setSearchQuery(stockSymbol);
+      } catch (error) {
+        if (retries < MAX_RETRIES) {
+          retries++;
+          console.log(`Retry attempt ${retries} of ${MAX_RETRIES}`);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+          return attemptSearch();
         }
-      });
-      
-      console.log('Response:', response.data);
-      setSearchResults(response.data);
-      setSearchQuery(stockSymbol);
-    } catch (error) {
-      console.error('Search error:', error);
-      let errorMessage = 'Failed to connect to server. Please ensure the backend is running.';
-      
-      if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        const errorData = error.response.data;
-        errorMessage = `Server error: ${errorData.error || errorData.message || 'Unknown error'}`;
-        if (errorData.details) {
-          console.error('Error details:', errorData.details);
-          errorMessage += `\nDetails: ${errorData.details}`;
+        
+        let errorMessage = 'An error occurred while fetching data.';
+        
+        if (error.response) {
+          errorMessage = `Server error: ${error.response.data.message || 'Unknown error'}`;
+        } else if (error.request) {
+          errorMessage = 'No response from server. Please check if the backend is running.';
+        } else if (error.code === 'ECONNABORTED') {
+          errorMessage = 'Request timed out. Please try again.';
         }
-      } else if (error.request) {
-        // The request was made but no response was received
-        errorMessage = 'No response from server. Please check if the backend is running.';
-      } else if (error.code === 'ECONNABORTED') {
-        errorMessage = 'Request timed out. Please try again.';
+        
+        throw new Error(errorMessage);
       }
-      
-      setError(errorMessage);
-      setSearchResults(null); // Clear any previous results on error
+    };
+
+    try {
+      await attemptSearch();
+    } catch (error) {
+      console.error('Search error after retries:', error);
+      setError(error.message);
+      setSearchResults(null);
     } finally {
       setLoading(false);
     }
@@ -360,120 +386,131 @@ const handleSearch = async (query) => {
   };
 
   return (
-    <div className="p-6 bg-gradient-to-br from-gray-50 to-primary-50 min-h-[calc(100vh-64px)]">
-      <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-primary-600 to-accent-dark bg-clip-text text-transparent animate-gradient">
-          Market Sentiment Analyzer
-        </h1>
-        <p className="text-gray-600 mt-2">Real-time sentiment analysis from Twitter and News</p>
-        <div className="mt-6 flex justify-center items-center">
-          <SearchBar onSearch={handleSearch} />
-          <DateFilter dateRange={dateRange} onDateRangeChange={setDateRange} />
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Animated Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-background-start via-background-middle to-background-end animate-gradient-move">
+        {/* Animated Overlay */}
+        <div className="absolute inset-0 opacity-50">
+          <div className="absolute inset-0 bg-gradient-to-tr from-background-accent1/30 to-background-accent2/30 animate-background-shine" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1),transparent_50%)] animate-pulse-soft" />
         </div>
       </div>
-      
-      {error && (
-        <div className="text-red-500 text-center mb-4 p-4 bg-red-50 rounded-lg">
-          <p className="font-semibold">Error:</p>
-          <p>{error}</p>
-        </div>
-      )}
 
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />
-        </div>
-      ) : searchResults && (
-        <div className="max-w-7xl mx-auto">
-           {/* Sentiment Analysis Overview - Moved to top */}
-           {filteredMetrics && filteredMetrics.volume > 0 && (
-               <SentimentOverview metrics={filteredMetrics} />
-           )}
+      {/* Content Container */}
+      <div className="relative z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Hero Section */}
+          <div className="text-center mb-12">
+            <h1 className="text-5xl font-black text-white mb-4 drop-shadow-lg">
+              Market Analytics Hub
+            </h1>
+            <p className="text-gray-200 text-lg mb-8">
+              Real-time Market Intelligence & Sentiment Analysis
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <SearchBar onSearch={handleSearch} />
+              <DateFilter dateRange={dateRange} onDateRangeChange={setDateRange} />
+            </div>
+          </div>
 
-           {/* Stock Price Overview */}
-           {searchResults.stockQuote && (
-              <div className="bg-white rounded-xl shadow-xl p-6 mb-6 hover:shadow-2xl transition-shadow">
-                 <h3 className="text-lg font-semibold text-gray-700 mb-4">Stock Overview</h3>
-                 <div className="flex justify-between items-center">
-                     <div>
-                         <span className="text-2xl font-bold text-gray-800 mr-2">{searchQuery}</span>
-                          <span className="text-3xl font-bold text-primary-600">{searchResults.stockQuote.c.toFixed(2)}</span> {/* Current Price */}
-                     </div>
-                     <div>
-                         {formatStockChange(searchResults.stockQuote.d, searchResults.stockQuote.dp)} {/* Change and Percentage Change */}
-                     </div>
-                 </div>
-                 <div className="flex justify-between text-sm text-gray-600 mt-2">
-                     <span>Open: {searchResults.stockQuote.o.toFixed(2)}</span>
-                     <span>High: {searchResults.stockQuote.h.toFixed(2)}</span>
-                     <span>Low: {searchResults.stockQuote.l.toFixed(2)}</span>
-                     <span>Previous Close: {searchResults.stockQuote.pc.toFixed(2)}</span>
-                 </div>
+          {/* Error Display - Update styling for better contrast */}
+          {error && (
+            <div className="max-w-2xl mx-auto mb-8">
+              <div className="bg-red-900/80 border-l-4 border-red-500 p-4 rounded-xl backdrop-blur-sm text-white">
+                <div className="flex items-center space-x-3">
+                  <div className="flex-shrink-0">⚠️</div>
+                  <p>{error}</p>
+                </div>
               </div>
-           )}
+            </div>
+          )}
 
-           {/* --- Competitor Stocks Section --- */}
-           <div className="bg-white rounded-xl shadow-xl p-6 mb-6">
-             <h3 className="text-lg font-semibold text-gray-700 mb-4">Competitor Stock Prices</h3>
-             {loadingCompetitors ? (
-               <div>Loading competitor stocks...</div>
-             ) : competitorStocks.length === 0 ? (
-               <div className="text-gray-500">No competitor data available.</div>
-             ) : (
-               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                 {competitorStocks.map((comp) => (
-                   <div key={comp.symbol} className="border rounded-lg p-4 flex flex-col items-center bg-gray-50">
-                     <span className="font-bold text-primary-600 text-lg">{comp.symbol}</span>
-                     {comp.stockQuote ? (
-                       <>
-                         <span className="text-2xl font-bold">{comp.stockQuote.c.toFixed(2)}</span>
-                         <span className={
-                           comp.stockQuote.d > 0
-                             ? 'text-green-600'
-                             : comp.stockQuote.d < 0
-                             ? 'text-red-600'
-                             : 'text-gray-600'
-                         }>
-                           {comp.stockQuote.d > 0 ? '+' : ''}
-                           {comp.stockQuote.d?.toFixed(2)} ({comp.stockQuote.dp > 0 ? '+' : ''}{comp.stockQuote.dp?.toFixed(2)}%)
-                         </span>
-                       </>
-                     ) : (
-                       <span className="text-gray-400 text-sm">No data</span>
-                     )}
-                   </div>
-                 ))}
-               </div>
-             )}
-           </div>
-           {/* --- End Competitor Stocks Section --- */}
-
-           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-               {/* Sentiment and Stock Price Chart Column (Now Left) */}
-               <div className="lg:col-span-1">
-                  <SentimentChart 
-                    data={getFilteredArticles(searchResults.articles)} 
-                    dateRange={dateRange} 
-                    stockCandles={searchResults.stockCandles} // Pass stockCandles data
-                  />
+          {/* Loading State - Update styling */}
+          {loading ? (
+            <div className="flex flex-col items-center justify-center h-64">
+              <div className="w-16 h-16 border-4 border-primary-200 border-t-primary-600 
+                            rounded-full animate-spin mb-4" />
+              <p className="text-white animate-pulse">Processing market data...</p>
+            </div>
+          ) : searchResults && (
+            <div className="space-y-8 animate-fade-in">
+              {/* Sentiment Overview Section */}
+              {filteredMetrics && <SentimentOverviewSection metrics={filteredMetrics} />}
+              
+              {/* Competitor Stocks Section */}
+              {searchResults.competitorQuotes && Object.keys(searchResults.competitorQuotes).length > 0 && (
+                <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-6 mb-6">
+                  <h3 className="text-xl font-bold text-gray-800 mb-6">Market Competitors</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {Object.entries(searchResults.competitorQuotes).map(([symbol, quote]) => (
+                      <div key={symbol} 
+                           className="bg-white rounded-xl shadow-md p-4 hover:shadow-lg transition-shadow duration-300">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-lg font-bold text-gray-900">{symbol}</span>
+                          <span className={`text-sm font-semibold ${
+                            quote.dp > 0 ? 'text-green-500' : quote.dp < 0 ? 'text-red-500' : 'text-gray-500'
+                          }`}>
+                            {quote.dp > 0 ? '↑' : quote.dp < 0 ? '↓' : '•'}
+                          </span>
+                        </div>
+                        <div className="text-2xl font-bold text-primary-600 mb-2">
+                          ${quote.c.toFixed(2)}
+                        </div>
+                        <div className="flex justify-between text-sm text-gray-500">
+                          <span>Change</span>
+                          <span className={quote.d > 0 ? 'text-green-500' : quote.d < 0 ? 'text-red-500' : 'text-gray-500'}>
+                            {quote.d > 0 ? '+' : ''}{quote.d.toFixed(2)} ({quote.dp.toFixed(2)}%)
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                {/* Competitors List Column (Now Right) */}
-                <div className="lg:col-span-1">
-                  {/* Placeholder for Competitors List */}
-                  <CompetitorsList 
-                    stockSymbol={searchQuery} 
-                    competitorQuotes={searchResults.competitorQuotes} // Pass competitor quotes
-                  />
-                </div>
-           </div>
+              )}
 
-           <div className="grid grid-cols-1 mb-6">
-               <div className="lg:col-span-2"> {/* Adjust span if needed, assuming news takes full width below charts */}
-                 <NewsSection selectedStock={searchQuery} />
-               </div>
-           </div>
+              {/* Charts Section - Modified to show only Sentiment */}
+              <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-6">
+                <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl 
+                              transition-shadow duration-300 overflow-hidden">
+                  <div className="p-6">
+                    <h3 className="text-xl font-bold text-gray-800 mb-4">Market Sentiment</h3>
+                    <SentimentChart 
+                      data={getFilteredArticles(searchResults.articles)} 
+                      dateRange={dateRange} 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* News Section */}
+              <div className="bg-white rounded-2xl shadow-lg p-6 animate-slide-up">
+                <h3 className="text-xl font-bold text-gray-800 mb-6">Latest Market News</h3>
+                <NewsSection selectedStock={searchQuery} />
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
+
+// New MetricCard component
+function MetricCard({ title, value, trend, icon }) {
+  return (
+    <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
+      <div className="flex items-center justify-between">
+        <span className="text-2xl">{icon}</span>
+        {trend && (
+          <span className={`text-sm font-medium ${
+            trend === 'positive' ? 'text-green-500' : 'text-red-500'
+          }`}>
+            {trend === 'positive' ? '↑' : '↓'}
+          </span>
+        )}
+      </div>
+      <h3 className="text-gray-600 text-sm mt-4">{title}</h3>
+      <p className="text-2xl font-bold text-gray-800 mt-2">{value}</p>
     </div>
   );
 }
