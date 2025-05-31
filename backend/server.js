@@ -4,6 +4,7 @@ import { config } from './config/env.js';
 import { searchRouter } from './routes/search.js';
 import { sentimentRouter } from './routes/sentiment.js';
 import { newsRouter } from './routes/news.js';
+import competitors from './competitors.js'; // Import competitors mapping
 
 const app = express();
 
@@ -21,6 +22,17 @@ app.use(express.json());
 // Basic test route
 app.get('/', (req, res) => {
   res.json({ status: 'Server is running' });
+});
+
+// New route to get competitors for a company symbol
+app.get('/api/competitors/:symbol', (req, res) => {
+  const symbol = req.params.symbol.toUpperCase();
+  const comp = competitors[symbol];
+  if (comp) {
+    res.json({ competitors: comp });
+  } else {
+    res.status(404).json({ error: 'No competitors found for this symbol.' });
+  }
 });
 
 // Routes

@@ -186,6 +186,8 @@ function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [competitorStocks, setCompetitorStocks] = useState([]); // NEW: state for competitor stocks
+  const [loadingCompetitors, setLoadingCompetitors] = useState(false);
 
   // Helper function to get the correct stock symbol
   const getStockSymbol = (query) => {
@@ -256,7 +258,7 @@ function Dashboard() {
     return filtered;
   };
 
-  const handleSearch = async (query) => {
+const handleSearch = async (query) => {
     setLoading(true);
     setError(null);
     
@@ -276,7 +278,7 @@ function Dashboard() {
       const response = await axios.get(`http://localhost:5000/api/search/${encodeURIComponent(stockSymbol)}`, {
         params: {
           dateRange: dateRange,
-          competitorSymbols: competitorSymbols
+          competitorSymbols: competitorSymbols // Include competitor symbols in the request
         },
         timeout: 10000, // 10 second timeout
         headers: {
@@ -410,7 +412,42 @@ function Dashboard() {
               </div>
            )}
 
-           {/* Charts and Competitors Section - Swapped positions */}
+           {/* --- Competitor Stocks Section --- */}
+           <div className="bg-white rounded-xl shadow-xl p-6 mb-6">
+             <h3 className="text-lg font-semibold text-gray-700 mb-4">Competitor Stock Prices</h3>
+             {loadingCompetitors ? (
+               <div>Loading competitor stocks...</div>
+             ) : competitorStocks.length === 0 ? (
+               <div className="text-gray-500">No competitor data available.</div>
+             ) : (
+               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                 {competitorStocks.map((comp) => (
+                   <div key={comp.symbol} className="border rounded-lg p-4 flex flex-col items-center bg-gray-50">
+                     <span className="font-bold text-primary-600 text-lg">{comp.symbol}</span>
+                     {comp.stockQuote ? (
+                       <>
+                         <span className="text-2xl font-bold">{comp.stockQuote.c.toFixed(2)}</span>
+                         <span className={
+                           comp.stockQuote.d > 0
+                             ? 'text-green-600'
+                             : comp.stockQuote.d < 0
+                             ? 'text-red-600'
+                             : 'text-gray-600'
+                         }>
+                           {comp.stockQuote.d > 0 ? '+' : ''}
+                           {comp.stockQuote.d?.toFixed(2)} ({comp.stockQuote.dp > 0 ? '+' : ''}{comp.stockQuote.dp?.toFixed(2)}%)
+                         </span>
+                       </>
+                     ) : (
+                       <span className="text-gray-400 text-sm">No data</span>
+                     )}
+                   </div>
+                 ))}
+               </div>
+             )}
+           </div>
+           {/* --- End Competitor Stocks Section --- */}
+
            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                {/* Sentiment and Stock Price Chart Column (Now Left) */}
                <div className="lg:col-span-1">

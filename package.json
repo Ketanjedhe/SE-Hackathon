@@ -16,6 +16,7 @@
     "chart.js": "^4.4.9",
     "date-fns": "^3.3.1",
     "express": "^4.18.2",
+    "finnhub": "^1.2.19",
     "natural": "^6.10.4",
     "react": "^19.1.0",
     "react-chartjs-2": "^5.3.0",
