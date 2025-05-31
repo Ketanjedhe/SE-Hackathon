@@ -1,13 +1,10 @@
 import fetch from 'node-fetch';
 
 const NEWS_API_BASE_URL = 'https://newsapi.org/v2';
-const API_KEY = process.env.NEWS_API_KEY;
 
 export async function getNewsForTopic(query) {
-  if (!API_KEY) {
-    throw new Error('NEWS_API_KEY is not configured');
-  }
-
+  const API_KEY = global.config.NEWS_API_KEY;
+  
   try {
     const url = `${NEWS_API_BASE_URL}/everything?q=${encodeURIComponent(query)}&sortBy=publishedAt&language=en&apiKey=${API_KEY}`;
     console.log('Fetching news from:', url);
